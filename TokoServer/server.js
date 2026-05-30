@@ -15,12 +15,21 @@ const PROJECT_ID = 'tokoapp-497813';
 const REGION = 'us-central1';
 const MODEL = 'virtual-try-on-001';
 
-// Load credentials
-const credentialsPath = path.join(__dirname, 'google-credentials.json');
-const auth = new GoogleAuth({
-  keyFile: credentialsPath,
-  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-});
+// Load credentials from env variable (Railway) or file (local)
+let auth;
+if (process.env.GOOGLE_CREDENTIALS) {
+  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  auth = new GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+} else {
+  const credentialsPath = path.join(__dirname, 'google-credentials.json');
+  auth = new GoogleAuth({
+    keyFile: credentialsPath,
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+}
 
 // Health check
 app.get('/', (req, res) => {
@@ -28,7 +37,6 @@ app.get('/', (req, res) => {
 });
 
 // Virtual Try-On endpoint
-// Accepts: multipart/form-data with 'person' and 'clothing' image files
 app.post('/tryon', upload.fields([
   { name: 'person', maxCount: 1 },
   { name: 'clothing', maxCount: 1 },
@@ -41,8 +49,7 @@ app.post('/tryon', upload.fields([
       return res.status(400).json({ error: 'Both person and clothing images are required' });
     }
 
-    // Convert to base64
-    const personBase64 = personFile.buffer.toString('base64');
+    const personBase64   = personFile.buffer.toString('base64');
     const clothingBase64 = clothingFile.buffer.toString('base64');
 
     // Get access token
@@ -56,17 +63,11 @@ app.post('/tryon', upload.fields([
     const payload = {
       instances: [
         {
-          person_image: {
-            bytesBase64Encoded: personBase64,
-          },
-          product_image: {
-            bytesBase64Encoded: clothingBase64,
-          },
+          person_image:  { bytesBase64Encoded: personBase64 },
+          product_image: { bytesBase64Encoded: clothingBase64 },
         },
       ],
-      parameters: {
-        imageCount: 1,
-      },
+      parameters: { imageCount: 1 },
     };
 
     const response = await fetch(endpoint, {
@@ -85,9 +86,8 @@ app.post('/tryon', upload.fields([
     }
 
     const data = await response.json();
-
-    // Extract the generated image
     const generatedImage = data?.predictions?.[0]?.bytesBase64Encoded;
+
     if (!generatedImage) {
       return res.status(500).json({ error: 'No image returned from Vertex AI' });
     }
@@ -103,5 +103,4 @@ app.post('/tryon', upload.fields([
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`TokoServer running on port ${PORT}`);
-  console.log(`Try-on endpoint: POST http://localhost:${PORT}/tryon`);
 });
