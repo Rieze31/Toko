@@ -16,9 +16,8 @@ type Filter = typeof FILTERS[number];
 const { width: SCREEN_W } = Dimensions.get('window');
 const CANVAS_H = 400;
 
-// ⚠️ Change this to your Railway URL after deployment
-// For local testing use your PC's IP: http://192.168.100.1:3000
-const SERVER_URL = 'http://192.168.100.11:3000';
+
+const SERVER_URL = 'https://toko-production-fac4.up.railway.app';
 
 interface Props { items: WardrobeItem[] }
 
