@@ -120,45 +120,56 @@ export default function MirrorScreen({ items }: Props) {
   };
 
   const runAITryOn = async (item: WardrobeItem) => {
-    if (!bodyPhoto) {
-      Alert.alert('No photo', 'Please add your full body photo first.');
-      return;
+  if (!bodyPhoto) {
+    Alert.alert('No photo', 'Please add your full body photo first.');
+    return;
+  }
+  if (!item.photo_uri) {
+    Alert.alert('No clothing photo', `"${item.name}" needs a photo. Go to Wardrobe and tap the item to add one.`);
+    return;
+  }
+  setLoading(true);
+  setAiResult(null);
+  try {
+    const formData = new FormData();
+    formData.append('person', { uri: bodyPhoto, type: 'image/jpeg', name: 'person.jpg' } as any);
+    formData.append('clothing', { uri: item.photo_uri, type: 'image/jpeg', name: 'clothing.jpg' } as any);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 180000); // 3 minutes
+
+    const response = await fetch(`${SERVER_URL}/tryon`, {
+      method: 'POST',
+      body: formData,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Server error');
     }
-    if (!item.photo_uri) {
-      Alert.alert('No clothing photo', `"${item.name}" needs a photo. Go to Wardrobe and tap the item to add one.`);
-      return;
+
+    const data = await response.json();
+    if (data.image) {
+      setAiResult(`data:image/png;base64,${data.image}`);
+      incrementWears(item.id);
     }
-    setLoading(true);
-    setAiResult(null);
-    try {
-      const formData = new FormData();
-      formData.append('person', { uri: bodyPhoto, type: 'image/jpeg', name: 'person.jpg' } as any);
-      formData.append('clothing', { uri: item.photo_uri, type: 'image/jpeg', name: 'clothing.jpg' } as any);
-
-      const response = await fetch(`${SERVER_URL}/tryon`, {
-        method: 'POST',
-        body: formData,
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Server error');
-      }
-
-      const data = await response.json();
-      if (data.image) {
-        setAiResult(`data:image/png;base64,${data.image}`);
-        incrementWears(item.id);
-      }
-    } catch (err: any) {
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      Alert.alert('Timed out', 'AI Try-On took too long. Try again — Hugging Face GPU queue can be slow.', [
+        { text: 'OK', onPress: () => setMode('manual') },
+      ]);
+    } else {
       Alert.alert('AI Try-On failed', `${err.message}\n\nSwitching to manual mode.`, [
         { text: 'OK', onPress: () => setMode('manual') },
       ]);
-    } finally {
-      setLoading(false);
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleItemTap = (item: WardrobeItem) => {
     if (mode === 'ai') { runAITryOn(item); return; }
@@ -252,7 +263,7 @@ export default function MirrorScreen({ items }: Props) {
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#7D9080" />
             <Text style={styles.loadingText}>AI is trying on your outfit…</Text>
-            <Text style={styles.loadingSubtext}>This may take 10–20 seconds</Text>
+            <Text style={styles.loadingSubtext}>This may take 1–2 minutes</Text>
           </View>
         )}
 
@@ -377,7 +388,7 @@ const styles = StyleSheet.create({
   bodyCanvasWrap:    { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
   loadingOverlay:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(249,249,246,0.92)', alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText:       { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
-  loadingSubtext:    { fontSize: 12, color: '#888' },
+  loadingSubtext: { fontSize: 12, color: '#888' },
   photoPrompt:       { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 10 },
   photoPromptIcon:   { fontSize: 36 },
   photoPromptText:   { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
