@@ -10,7 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 
-const HF_TOKEN = process.env.HF_TOKEN || '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';
+const HF_TOKEN = process.env.HF_TOKEN;
 
 app.get('/', (req, res) => {
   res.json({ status: 'TokoServer running', engine: 'IDM-VTON via Hugging Face' });
