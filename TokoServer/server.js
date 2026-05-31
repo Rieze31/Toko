@@ -9,12 +9,24 @@ app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 
 const HF_TOKEN = process.env.HF_TOKEN;
-// Gradio Space URL - the subdomain is username-spacename (dashes, lowercase)
 const SPACE_URL = 'https://yisol-idm-vton.hf.space';
 
 app.get('/', (req, res) => {
   res.json({ status: 'TokoServer running', engine: 'IDM-VTON' });
 });
+
+async function uploadImage(buffer, filename) {
+  const form = new FormData();
+  form.append('files', new Blob([buffer], { type: 'image/jpeg' }), filename);
+  const res = await fetch(`${SPACE_URL}/upload`, {
+    method: 'POST',
+    headers: HF_TOKEN ? { 'Authorization': `Bearer ${HF_TOKEN}` } : {},
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+  const paths = await res.json();
+  return paths[0];
+}
 
 app.post('/tryon', upload.fields([
   { name: 'person', maxCount: 1 },
@@ -23,101 +35,68 @@ app.post('/tryon', upload.fields([
   try {
     const personFile   = req.files?.person?.[0];
     const clothingFile = req.files?.clothing?.[0];
-
     if (!personFile || !clothingFile) {
       return res.status(400).json({ error: 'Both images required' });
     }
 
-    console.log('Uploading images to HF Space...');
+    console.log('Uploading images...');
+    const [personPath, clothPath] = await Promise.all([
+      uploadImage(personFile.buffer, 'person.jpg'),
+      uploadImage(clothingFile.buffer, 'clothing.jpg'),
+    ]);
+    console.log('Uploaded:', personPath, clothPath);
 
-    // Upload person image
-    const personForm = new FormData();
-    personForm.append('files', new Blob([personFile.buffer], { type: 'image/jpeg' }), 'person.jpg');
-    const personUpload = await fetch(`${SPACE_URL}/upload`, {
-      method: 'POST',
-      headers: HF_TOKEN ? { 'Authorization': `Bearer ${HF_TOKEN}` } : {},
-      body: personForm,
-    });
+    // First try fn_index 0, then 1 if it fails
+    for (const fn_index of [0, 1, 2]) {
+      console.log(`Trying fn_index ${fn_index}...`);
+      const predictRes = await fetch(`${SPACE_URL}/run/predict`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(HF_TOKEN ? { 'Authorization': `Bearer ${HF_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({
+          fn_index,
+          data: [
+            { path: personPath },
+            { path: clothPath },
+            null,
+            null,
+            true,
+            true,
+            20,
+            1,
+          ],
+        }),
+      });
 
-    if (!personUpload.ok) {
-      const t = await personUpload.text();
-      console.error('Person upload failed:', personUpload.status, t);
-      throw new Error(`Person upload failed: ${personUpload.status}`);
-    }
-    const personPaths = await personUpload.json();
-    console.log('Person uploaded:', personPaths);
+      const text = await predictRes.text();
+      console.log(`fn_index ${fn_index} status:`, predictRes.status, text.substring(0, 200));
 
-    // Upload clothing image
-    const clothForm = new FormData();
-    clothForm.append('files', new Blob([clothingFile.buffer], { type: 'image/jpeg' }), 'clothing.jpg');
-    const clothUpload = await fetch(`${SPACE_URL}/upload`, {
-      method: 'POST',
-      headers: HF_TOKEN ? { 'Authorization': `Bearer ${HF_TOKEN}` } : {},
-      body: clothForm,
-    });
+      if (!predictRes.ok) continue;
 
-    if (!clothUpload.ok) {
-      const t = await clothUpload.text();
-      console.error('Cloth upload failed:', clothUpload.status, t);
-      throw new Error(`Cloth upload failed: ${clothUpload.status}`);
-    }
-    const clothPaths = await clothUpload.json();
-    console.log('Clothing uploaded:', clothPaths);
+      const result = JSON.parse(text);
+      const outputImage = result?.data?.[0];
+      if (!outputImage) continue;
 
-    console.log('Running prediction...');
+      // Convert to base64
+      let base64Image;
+      if (outputImage?.path) {
+        const imgRes = await fetch(`${SPACE_URL}/file=${outputImage.path}`);
+        base64Image = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
+      } else if (typeof outputImage === 'string' && outputImage.startsWith('data:')) {
+        base64Image = outputImage.split(',')[1];
+      } else if (typeof outputImage === 'string' && outputImage.startsWith('http')) {
+        const imgRes = await fetch(outputImage);
+        base64Image = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
+      } else {
+        base64Image = outputImage;
+      }
 
-    // Run prediction
-    const predictRes = await fetch(`${SPACE_URL}/run/predict`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(HF_TOKEN ? { 'Authorization': `Bearer ${HF_TOKEN}` } : {}),
-      },
-      body: JSON.stringify({
-        fn_index: 0,
-        data: [
-          { path: personPaths[0] },
-          { path: clothPaths[0] },
-          null,
-          null,
-          true,
-          true,
-          20,
-          1,
-        ],
-      }),
-    });
-
-    if (!predictRes.ok) {
-      const t = await predictRes.text();
-      console.error('Predict failed:', predictRes.status, t);
-      throw new Error(`Prediction failed: ${predictRes.status} - ${t.substring(0, 200)}`);
+      return res.json({ image: base64Image });
     }
 
-    const result = await predictRes.json();
-    console.log('Result keys:', Object.keys(result));
-
-    const outputImage = result?.data?.[0];
-    if (!outputImage) {
-      console.error('Full result:', JSON.stringify(result).substring(0, 500));
-      throw new Error('No output image in response');
-    }
-
-    // Convert to base64
-    let base64Image;
-    if (outputImage?.path) {
-      const imgRes = await fetch(`${SPACE_URL}/file=${outputImage.path}`);
-      base64Image = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
-    } else if (typeof outputImage === 'string' && outputImage.startsWith('data:')) {
-      base64Image = outputImage.split(',')[1];
-    } else if (typeof outputImage === 'string' && outputImage.startsWith('http')) {
-      const imgRes = await fetch(outputImage);
-      base64Image = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
-    } else {
-      base64Image = outputImage;
-    }
-
-    res.json({ image: base64Image });
+    throw new Error('All fn_index attempts failed');
 
   } catch (err) {
     console.error('Server error:', err.message);
