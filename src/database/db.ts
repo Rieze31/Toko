@@ -105,3 +105,18 @@ export function saveOutfit(tops?: number, bottoms?: number, shoes?: number, oute
     [tops ?? null, bottoms ?? null, shoes ?? null, outerwear ?? null, new Date().toISOString()]
   );
 }
+
+export function getSavedOutfits(): Array<{
+  id: number;
+  tops_id: number | null;
+  bottoms_id: number | null;
+  shoes_id: number | null;
+  outerwear_id: number | null;
+  saved_at: string;
+}> {
+  return db.getAllSync('SELECT * FROM outfits ORDER BY saved_at DESC');
+}
+
+export function deleteSavedOutfit(id: number) {
+  db.runSync('DELETE FROM outfits WHERE id = ?', [id]);
+}

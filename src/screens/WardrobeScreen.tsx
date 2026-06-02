@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { WardrobeItem, ItemType, Silhouette } from '../types';
 import { ShirtSilhouette, TrouserSilhouette, SneakerSilhouette, JacketSilhouette } from '../components/Silhouettes';
 import { addItem, deleteItem, updateItemPhoto } from '../database/db';
+import PhotoCaptureScreen from './PhotoCaptureScreen';
 
 const FILTERS = ['All', 'Tops', 'Bottoms', 'Outerwear', 'Shoes'] as const;
 type Filter = typeof FILTERS[number];
@@ -36,6 +37,7 @@ export default function WardrobeScreen({ items, onRefresh }: Props) {
   const [filter, setFilter] = useState<Filter>('All');
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [showPhotoCaptureMode, setShowPhotoCaptureMode] = useState(false);
 
   // Add form state
   const [newName, setNewName]       = useState('');
@@ -143,16 +145,41 @@ export default function WardrobeScreen({ items, onRefresh }: Props) {
 
   return (
     <View style={s.root}>
-      {/* Header */}
-      <View style={s.header}>
-        <View>
-          <Text style={s.title}>My Closet</Text>
-          <Text style={s.subtitle}>{items.length} items catalogued</Text>
+      {showPhotoCaptureMode ? (
+        // Photo Capture Screen
+        <View style={{ flex: 1 }}>
+          <TouchableOpacity 
+            style={s.closePhotoCaptureButton}
+            onPress={() => setShowPhotoCaptureMode(false)}
+          >
+            <Text style={s.closePhotoCaptureButtonText}>← Back to Wardrobe</Text>
+          </TouchableOpacity>
+          <PhotoCaptureScreen 
+            onItemAdded={() => {
+              onRefresh();
+              setShowPhotoCaptureMode(false);
+            }}
+            onClose={() => setShowPhotoCaptureMode(false)}
+          />
         </View>
-        <TouchableOpacity style={s.addBtn} onPress={() => setShowAdd(true)}>
-          <Text style={s.addBtnText}>+ Add</Text>
-        </TouchableOpacity>
-      </View>
+      ) : (
+        // Wardrobe View
+        <>
+          {/* Header */}
+          <View style={s.header}>
+            <View>
+              <Text style={s.title}>My Closet</Text>
+              <Text style={s.subtitle}>{items.length} items catalogued</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={s.scanBtn} onPress={() => setShowPhotoCaptureMode(true)}>
+                <Text style={s.scanBtnText}>📷 Scan</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.addBtn} onPress={() => setShowAdd(true)}>
+                <Text style={s.addBtnText}>+ Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
       <View style={s.searchWrap}>
         <TextInput
@@ -275,6 +302,8 @@ export default function WardrobeScreen({ items, onRefresh }: Props) {
           </View>
         </View>
       </Modal>
+        </>
+      )}
     </View>
   );
 }
@@ -286,6 +315,10 @@ const s = StyleSheet.create({
   subtitle:       { fontSize: 13, color: '#888', marginTop: 2 },
   addBtn:         { backgroundColor: '#7D9080', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText:     { color: '#fff', fontSize: 13, fontWeight: '700' },
+  scanBtn:        { backgroundColor: '#2a8a3a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
+  scanBtnText:    { color: '#fff', fontSize: 13, fontWeight: '700' },
+  closePhotoCaptureButton: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#f0f0f0', marginBottom: 8 },
+  closePhotoCaptureButtonText: { fontSize: 14, fontWeight: '600', color: '#666' },
   searchWrap:     { marginHorizontal: 20, marginBottom: 12, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EAEAEA', paddingHorizontal: 12, height: 40, justifyContent: 'center' },
   searchInput:    { fontSize: 14, color: '#1A1A1A' },
   filterScroll:   { flexGrow: 0, marginBottom: 12 },
