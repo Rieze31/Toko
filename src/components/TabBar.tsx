@@ -6,6 +6,7 @@ import { Tab } from '../types';
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: 'mirror',    label: 'Mirror',    emoji: '🪞' },
   { id: 'wardrobe',  label: 'Wardrobe',  emoji: '👔' },
+  { id: 'outfits',   label: 'Outfits',   emoji: '✨' },
   { id: 'analytics', label: 'Insights',  emoji: '📊' },
   { id: 'settings',  label: 'Settings',  emoji: '⚙️' },
 ];

@@ -10,6 +10,7 @@ import MirrorScreen from './src/screens/MirrorScreen';
 import WardrobeScreen from './src/screens/WardrobeScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import OutfitsScreen from './src/screens/OutfitsScreen';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('mirror');
@@ -34,6 +35,7 @@ export default function App() {
     switch (activeTab) {
       case 'mirror':    return <MirrorScreen items={items} />;
       case 'wardrobe':  return <WardrobeScreen items={items} onRefresh={refresh} />;
+      case 'outfits':   return <OutfitsScreen items={items} />;
       case 'analytics': return <AnalyticsScreen items={items} />;
       case 'settings':  return <SettingsScreen />;
     }
